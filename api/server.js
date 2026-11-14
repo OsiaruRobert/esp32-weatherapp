@@ -4,6 +4,12 @@ import readings from "./data/readings.js";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(express.json());
+app.use(express.static("public"));
+
+
+app.use(express.json());
+
 app.get("/readings", (req, res) => {
     console.log("Reading all data");
 

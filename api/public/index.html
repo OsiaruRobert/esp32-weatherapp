@@ -1,11 +1,230 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ESP32 Weather Station</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent-temp: #f97316;
+      --accent-hum: #38bdf8;
+      --border: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 2rem 1rem;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 760px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .status {
+      font-size: 0.85rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #22c55e;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    .card-label {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .card-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+
+    .temp { color: var(--accent-temp); }
+    .hum { color: var(--accent-hum); }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    button {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.9rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    button:hover {
+      background: #273549;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+  </style>
 </head>
 <body>
-    
+  <div class="container">
+    <header>
+      <h1>ESP32 Weather Monitor</h1>
+      <div class="status">
+        <span class="dot"></span>
+        <span id="last-updated">Updating...</span>
+      </div>
+    </header>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Latest Temperature</div>
+        <div class="card-value temp" id="latest-temp">-- °C</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Latest Humidity</div>
+        <div class="card-value hum" id="latest-hum">-- %</div>
+      </div>
+    </div>
+
+    <div class="history-header">
+      <h2>Recent Readings</h2>
+      <button onclick="fetchReadings()">Refresh Now</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Date & Time</th>
+          <th>Temperature (°C)</th>
+          <th>Humidity (%)</th>
+        </tr>
+      </thead>
+      <tbody id="readings-table">
+        <tr>
+          <td colspan="3" style="color: var(--muted);">Loading readings...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    async function fetchReadings() {
+      try {
+        const res = await fetch("/readings");
+        const json = await res.json();
+        const data = json.data || [];
+
+        const tableBody = document.getElementById("readings-table");
+
+        if (data.length === 0) {
+          tableBody.innerHTML = `<tr><td colspan="3" style="color: var(--muted);">No readings recorded yet.</td></tr>`;
+          return;
+        }
+
+        // Latest reading is the last item in the array
+        const latest = data[data.length - 1];
+        document.getElementById("latest-temp").textContent = `${latest.temperature ?? "--"} °C`;
+        document.getElementById("latest-hum").textContent = `${latest.humidity ?? "--"} %`;
+
+        // Show newest readings first
+        const reversed = [...data].reverse().slice(0, 20);
+        tableBody.innerHTML = reversed.map(item => {
+          const formattedDate = item.date
+            ? new Date(item.date).toLocaleString()
+            : "N/A";
+          return `
+            <tr>
+              <td>${formattedDate}</td>
+              <td>${item.temperature ?? "--"} °C</td>
+              <td>${item.humidity ?? "--"} %</td>
+            </tr>
+          `;
+        }).join("");
+
+        document.getElementById("last-updated").textContent =
+          `Updated ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        console.error("Failed to fetch readings:", err);
+        document.getElementById("last-updated").textContent = "Connection error";
+      }
+    }
+
+    // Initial load + poll every 5 seconds
+    fetchReadings();
+    setInterval(fetchReadings, 5000);
+  </script>
 </body>
 </html>
