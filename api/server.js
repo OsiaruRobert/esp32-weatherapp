@@ -30,29 +30,20 @@ app.get("/readings/:date", (req, res) => {
 })
 
 app.post("/readings", (req, res) => {
-    console.log("Reading all data");
-    const readingPOST = req.body.readings;
-    const date = Date.now();
-
-    const reading = {
-        ...readingPOST,
-        date
-    };
-
-    console.log(reading);
+    console.log("New reading received:", req.body);
+    const { humidity, temperature } = req.body || {};
 
     readings.push({
-        reading
+        humidity,
+        temperature,
+        date: new Date().toISOString()
     });
 
-    console.log(readings);
-    
-    res
-        .status(201)
-        .json({
-            "message": "Reading added to data"
-        })
-})
+    res.status(201).json({
+        message: "Reading added to data"
+    });
+});
+
 
 app.use((req, res) => {
     res.json({
