@@ -1,0 +1,12 @@
+{
+  "name": "esp-weather-app",
+  "version": "1.0.0",
+  "description": "my weather app",
+  "license": "ISC",
+  "author": "osiaru",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --env-file=.env server.js"
+  }
+}
