@@ -4,7 +4,8 @@
 #include <ArduinoJson.h>
 
 // Library setup
-ESP32HTTPClient client("https://api");
+// ESP32HTTPClient client("https://c550-105-113-72-222.ngrok-free.app");
+ESP32HTTPClient client("https://esp32-weatherapp-api.onrender.com");
 
 // Define GPIO pins
 const int DHTPIN = 4;
@@ -42,14 +43,15 @@ float genReadingValue(String kind = "h") {
   return 0.0;
 }
 
-// Post readings to API
+// Library setup (use your live Render URL)
+
 void postReadings(float hum, float temp) {
   String message = "";
 
-  // Example POST request (update payload format as needed by your API)
-  String jsonPayload = "{\"humidty\":" + String(hum, 1) + ",\"temperature\":" + String(temp, 1) + "}";
-
-  client.post("/")
+  // Chain .body() calls — the library builds {"humidity": ..., "temperature": ...} automatically
+  client.post("/readings")
+    .body("humidity", hum)
+    .body("temperature", temp)
     .onError([](int code, const char* msg) {
       Serial.printf("FETCH Error %d: %s\n", code, msg);
     })
@@ -57,11 +59,12 @@ void postReadings(float hum, float temp) {
 
   if (client.isSuccess() && message != "") {
     Serial.println(message);
-    beep(2);
+    beep(3);
   } else {
     Serial.println("Failed to POST Readings.");
   }
 }
+
 
 void setup() {
   Serial.begin(115200);
@@ -102,11 +105,10 @@ void loop() {
   Serial.print(tempC);
   Serial.println("°C");
 
-  beep(1, 100);
 
   // Increment counter and post every 20 readings (~40 seconds)
   counter++;
-  if (counter >= 20) {
+  if (counter >= 5) {
     counter = 0;
     postReadings(humidity, tempC);
   }
