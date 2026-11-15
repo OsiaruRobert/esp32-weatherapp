@@ -7,376 +7,408 @@
   <title>ESP32 Weather Monitor</title>
   <style>
     :root {
-      --bg: #f4f6f9;
-      --surface: #ffffff;
-      --surface-2: #f8fafc;
-      --text: #0f172a;
-      --muted: #64748b;
-      --border: #e2e8f0;
-      --temp: #ea580c;
-      --hum: #0284c7;
-      --ok: #16a34a;
-      --warn: #d97706;
-      --bad: #dc2626;
-      --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 4px 16px rgba(15, 23, 42, .04);
-      --radius: 16px;
+      --bg:#f4f6f9; --surface:#fff; --surface-2:#f1f5f9; --text:#0f172a; --muted:#64748b; --border:#e2e8f0;
+      --temp:#ea580c; --hum:#0284c7; --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+      --shadow:0 1px 2px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.04); --radius:16px;
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
-        --bg: #0b1220; --surface: #121b2e; --surface-2: #17223a;
-        --text: #f1f5f9; --muted: #94a3b8; --border: #243049;
-        --temp: #fb923c; --hum: #38bdf8; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
-        --shadow: none;
+        --bg:#0b1220; --surface:#121b2e; --surface-2:#1a2640; --text:#f1f5f9; --muted:#94a3b8; --border:#243049;
+        --temp:#fb923c; --hum:#38bdf8; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --shadow:none;
       }
     }
     :root[data-theme="dark"] {
-      --bg: #0b1220; --surface: #121b2e; --surface-2: #17223a;
-      --text: #f1f5f9; --muted: #94a3b8; --border: #243049;
-      --temp: #fb923c; --hum: #38bdf8; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
-      --shadow: none;
+      --bg:#0b1220; --surface:#121b2e; --surface-2:#1a2640; --text:#f1f5f9; --muted:#94a3b8; --border:#243049;
+      --temp:#fb923c; --hum:#38bdf8; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --shadow:none;
     }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text);
+      line-height:1.5; min-height:100vh; padding:clamp(1rem,3vw,2.5rem); font-variant-numeric:tabular-nums; }
+    .container { max-width:1000px; margin:0 auto; display:grid; gap:1.25rem; }
+    header,.row { display:flex; flex-wrap:wrap; gap:.75rem 1rem; justify-content:space-between; align-items:center; }
+    h1 { font-size:clamp(1.25rem,2.5vw,1.6rem); letter-spacing:-.01em; }
+    h2 { font-size:1.05rem; font-weight:650; }
+    .subtitle,.muted { color:var(--muted); font-size:.875rem; }
+    .toolbar { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { -webkit-text-size-adjust: 100%; }
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      min-height: 100vh;
-      padding: clamp(1rem, 3vw, 2.5rem);
-      font-variant-numeric: tabular-nums;
-    }
-    .container { max-width: 960px; margin: 0 auto; display: grid; gap: 1.25rem; }
+    .pill { display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .75rem; border-radius:999px;
+      background:var(--surface); border:1px solid var(--border); font-size:.8125rem; color:var(--muted); }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+    .pill[data-state=live] .dot { background:var(--ok); animation:pulse 2s infinite; }
+    .pill[data-state=stale] .dot { background:var(--warn); }
+    .pill[data-state=offline] .dot { background:var(--bad); }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 55%,transparent);} 70%,100%{box-shadow:0 0 0 7px transparent;} }
 
-    header { display: flex; flex-wrap: wrap; gap: .75rem 1rem; justify-content: space-between; align-items: center; }
-    h1 { font-size: clamp(1.25rem, 2.5vw, 1.6rem); font-weight: 700; letter-spacing: -.01em; }
-    .subtitle { color: var(--muted); font-size: .875rem; }
-    .toolbar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    button,input { font:inherit; font-size:.8125rem; color:var(--text); background:var(--surface); border:1px solid var(--border);
+      padding:.4rem .85rem; border-radius:10px; }
+    button { cursor:pointer; transition:background .15s,border-color .15s; }
+    button:hover { background:var(--surface-2); border-color:var(--muted); }
+    button:disabled { opacity:.6; cursor:progress; }
+    button[aria-pressed=true] { background:var(--text); color:var(--bg); border-color:var(--text); }
+    button:focus-visible,input:focus-visible,.chart:focus-visible,summary:focus-visible { outline:2px solid var(--hum); outline-offset:2px; }
+    input { width:5rem; }
 
-    .pill {
-      display: inline-flex; align-items: center; gap: .5rem;
-      padding: .35rem .75rem; border-radius: 999px;
-      background: var(--surface); border: 1px solid var(--border);
-      font-size: .8125rem; color: var(--muted);
-    }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-    .pill[data-state="live"] .dot { background: var(--ok); animation: pulse 2s infinite; }
-    .pill[data-state="stale"] .dot { background: var(--warn); }
-    .pill[data-state="offline"] .dot { background: var(--bad); }
-    @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+    .banner { display:none; padding:.75rem 1rem; border-radius:12px; font-size:.875rem; }
+    .banner.show { display:block; }
+    #offline-banner { background:color-mix(in srgb,var(--bad) 12%,var(--surface)); border:1px solid color-mix(in srgb,var(--bad) 40%,var(--border)); }
+    #alert-banner { background:color-mix(in srgb,var(--warn) 14%,var(--surface)); border:1px solid color-mix(in srgb,var(--warn) 45%,var(--border)); }
 
-    button {
-      font: inherit; font-size: .8125rem; color: var(--text);
-      background: var(--surface); border: 1px solid var(--border);
-      padding: .4rem .85rem; border-radius: 10px; cursor: pointer;
-      transition: background .15s, border-color .15s;
-    }
-    button:hover { background: var(--surface-2); border-color: var(--muted); }
-    button:focus-visible, .chart:focus-visible { outline: 2px solid var(--hum); outline-offset: 2px; }
-    button:disabled { opacity: .6; cursor: progress; }
+    .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)); gap:1rem; }
+    .card,.panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+    .card { padding:1.25rem; display:grid; grid-template-columns:auto 1fr; gap:1.25rem; align-items:center; }
+    .gauge { width:120px; height:170px; }
+    .label { color:var(--muted); font-size:.875rem; font-weight:500; display:flex; justify-content:space-between; gap:.5rem; }
+    .value { font-size:clamp(2.4rem,7vw,3.2rem); font-weight:700; letter-spacing:-.02em; line-height:1.1; margin:.25rem 0 .5rem; }
+    .value small { font-size:.45em; color:var(--muted); font-weight:600; margin-left:.15em; }
+    .temp .value { color:var(--temp); } .hum .value { color:var(--hum); }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:.5rem; padding-top:.75rem; border-top:1px solid var(--border); }
+    .stats span { display:block; font-size:.75rem; color:var(--muted); } .stats strong { font-size:.95rem; }
 
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1rem; }
-    .card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 1.25rem 1.25rem 1rem; box-shadow: var(--shadow);
-    }
-    .card-top { display: flex; justify-content: space-between; align-items: baseline; }
-    .card-label { color: var(--muted); font-size: .875rem; font-weight: 500; }
-    .card-value { font-size: clamp(2.25rem, 6vw, 3rem); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; margin: .25rem 0 .75rem; }
-    .card-value small { font-size: .45em; font-weight: 600; color: var(--muted); margin-left: .15em; }
-    .temp .card-value { color: var(--temp); }
-    .hum .card-value { color: var(--hum); }
-    .trend { font-size: .8125rem; color: var(--muted); }
+    /* thermometer */
+    .tube { fill:var(--surface-2); stroke:var(--border); stroke-width:2; }
+    .merc { fill:var(--merc,var(--temp)); transform-origin:30px 130px; transition:transform 1.2s cubic-bezier(.34,1.4,.5,1),fill 1.2s; }
+    .bulb { fill:var(--merc,var(--temp)); transition:fill 1.2s; animation:glow 3s ease-in-out infinite; transform-origin:30px 136px; }
+    @keyframes glow { 50% { transform:scale(1.06); } }
+    .tick { stroke:var(--muted); stroke-width:1.5; } .ticklabel { fill:var(--muted); font-size:9px; }
 
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--border); }
-    .stat span { display: block; font-size: .75rem; color: var(--muted); }
-    .stat strong { font-size: .95rem; font-weight: 600; }
+    /* cloud */
+    .cloud-shell { animation:drift 7s ease-in-out infinite alternate; }
+    @keyframes drift { to { transform:translateX(6px); } }
+    .water { transition:transform 1.4s cubic-bezier(.4,0,.2,1); }
+    .wave { animation:wave 3.5s linear infinite; }
+    @keyframes wave { to { transform:translateX(60px); } }
+    .rain { opacity:0; transition:opacity .8s; } .rain.on { opacity:1; }
+    .rain line { stroke:var(--hum); stroke-width:3; stroke-linecap:round; animation:fall 1.1s linear infinite; }
+    .rain line:nth-child(2) { animation-delay:.35s; } .rain line:nth-child(3) { animation-delay:.7s; }
+    @keyframes fall { 0%{transform:translateY(-6px);opacity:0;} 20%{opacity:1;} 100%{transform:translateY(22px);opacity:0;} }
 
-    .chart-wrap { position: relative; }
-    .chart { width: 100%; height: 140px; display: block; touch-action: pan-y; border-radius: 8px; }
-    .tip {
-      position: absolute; pointer-events: none; transform: translate(-50%, -110%);
-      background: var(--text); color: var(--bg); font-size: .75rem;
-      padding: .25rem .5rem; border-radius: 6px; white-space: nowrap; opacity: 0; transition: opacity .1s;
-    }
-    .tip.show { opacity: 1; }
+    .insights { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; }
+    .insight { padding:1rem 1.25rem; } .insight .big { font-size:1.5rem; font-weight:700; }
 
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-    .panel-head { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; gap: .75rem; flex-wrap: wrap; }
-    h2 { font-size: 1.05rem; font-weight: 650; }
-    .table-scroll { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; min-width: 420px; }
-    th, td { text-align: left; padding: .7rem 1.25rem; font-size: .875rem; border-top: 1px solid var(--border); white-space: nowrap; }
-    th { color: var(--muted); font-weight: 600; background: var(--surface-2); font-size: .8125rem; }
-    tbody tr:hover { background: var(--surface-2); }
-    td.empty { color: var(--muted); text-align: center; padding: 2rem 1rem; white-space: normal; }
+    .panel-head { display:flex; justify-content:space-between; align-items:center; padding:1rem 1.25rem; gap:.75rem; flex-wrap:wrap; }
+    .chart-wrap { position:relative; padding:0 1rem 1rem; }
+    .chart { width:100%; height:240px; display:block; border-radius:8px; touch-action:pan-y; }
+    .tip { position:absolute; pointer-events:none; transform:translate(-50%,-115%); background:var(--text); color:var(--bg);
+      font-size:.75rem; padding:.3rem .55rem; border-radius:6px; white-space:nowrap; opacity:0; transition:opacity .1s; }
+    .tip.show { opacity:1; }
+    .legend { display:flex; gap:1rem; font-size:.8125rem; color:var(--muted); }
+    .legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:.35rem; }
 
-    .banner { display: none; padding: .75rem 1rem; border-radius: 12px; background: color-mix(in srgb, var(--bad) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border)); font-size: .875rem; }
-    .banner.show { display: block; }
+    .table-scroll { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; min-width:440px; }
+    th,td { text-align:left; padding:.7rem 1.25rem; font-size:.875rem; border-top:1px solid var(--border); white-space:nowrap; }
+    th { color:var(--muted); font-weight:600; background:var(--surface-2); font-size:.8125rem; }
+    td.empty { color:var(--muted); text-align:center; padding:2rem 1rem; white-space:normal; }
 
-    @media (prefers-reduced-motion: reduce) { .dot { animation: none !important; } * { transition: none !important; } }
+    details.panel { padding:1rem 1.25rem; } summary { cursor:pointer; font-weight:650; }
+    .alerts { display:flex; flex-wrap:wrap; gap:1rem; margin-top:1rem; }
+    .alerts label { display:grid; gap:.25rem; font-size:.8125rem; color:var(--muted); }
+
+    @media (max-width:520px) { .card { grid-template-columns:1fr; justify-items:center; text-align:center; } .card>div:last-child { width:100%; } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; transition:none !important; } }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
+<div class="container">
+  <header>
+    <div><h1>ESP32 Weather Monitor</h1><p class="subtitle" id="subtitle">Waiting for the first reading</p></div>
+    <div class="toolbar">
+      <span class="pill" id="status" data-state="idle" role="status" aria-live="polite"><span class="dot"></span><span id="status-text">Connecting</span></span>
+      <button id="unit-btn" type="button" aria-label="Switch temperature unit">°C</button>
+      <button id="theme-btn" type="button" aria-label="Switch colour theme">Theme</button>
+    </div>
+  </header>
+
+  <div class="banner" id="offline-banner" role="alert">Cannot reach the device. Check that the ESP32 is powered and on the same network. Retrying automatically.</div>
+  <div class="banner" id="alert-banner" role="alert"></div>
+
+  <section class="grid2" aria-label="Latest readings">
+    <article class="card temp">
+      <svg class="gauge" id="thermo" viewBox="0 0 90 170" role="img" aria-label="Thermometer">
+        <rect class="tube" x="24" y="8" width="12" height="122" rx="6" />
+        <g id="ticks"></g>
+        <rect class="merc" id="merc" x="27" y="12" width="6" height="120" rx="3" />
+        <circle class="tube" cx="30" cy="140" r="19" />
+        <circle class="bulb" cx="30" cy="140" r="15" />
+      </svg>
       <div>
-        <h1>ESP32 Weather Monitor</h1>
-        <p class="subtitle" id="subtitle">Waiting for the first reading</p>
-      </div>
-      <div class="toolbar">
-        <span class="pill" id="status" data-state="idle" role="status" aria-live="polite">
-          <span class="dot"></span><span id="status-text">Connecting</span>
-        </span>
-        <button id="theme-btn" type="button" aria-label="Switch colour theme">Theme</button>
-      </div>
-    </header>
-
-    <div class="banner" id="banner" role="alert">Cannot reach the device. Check that the ESP32 is powered and on the same network. Retrying automatically.</div>
-
-    <section class="cards" aria-label="Latest readings">
-      <article class="card temp">
-        <div class="card-top">
-          <span class="card-label">Temperature</span>
-          <span class="trend" id="temp-trend"></span>
-        </div>
-        <div class="card-value" id="latest-temp">--<small>°C</small></div>
-        <div class="chart-wrap">
-          <svg class="chart" id="temp-chart" tabindex="0" role="img" aria-label="Temperature over recent readings"></svg>
-          <div class="tip" id="temp-tip"></div>
-        </div>
+        <div class="label"><span>Temperature</span><span id="temp-trend"></span></div>
+        <div class="value" id="latest-temp">--<small>°C</small></div>
         <div class="stats">
-          <div class="stat"><span>Min</span><strong id="temp-min">--</strong></div>
-          <div class="stat"><span>Average</span><strong id="temp-avg">--</strong></div>
-          <div class="stat"><span>Max</span><strong id="temp-max">--</strong></div>
+          <div><span>Min</span><strong id="temp-min">--</strong></div>
+          <div><span>Average</span><strong id="temp-avg">--</strong></div>
+          <div><span>Max</span><strong id="temp-max">--</strong></div>
         </div>
-      </article>
+      </div>
+    </article>
 
-      <article class="card hum">
-        <div class="card-top">
-          <span class="card-label">Humidity</span>
-          <span class="trend" id="hum-trend"></span>
-        </div>
-        <div class="card-value" id="latest-hum">--<small>%</small></div>
-        <div class="chart-wrap">
-          <svg class="chart" id="hum-chart" tabindex="0" role="img" aria-label="Humidity over recent readings"></svg>
-          <div class="tip" id="hum-tip"></div>
-        </div>
+    <article class="card hum">
+      <svg class="gauge" viewBox="0 0 120 130" role="img" aria-label="Humidity cloud" style="width:150px">
+        <defs>
+          <g id="cs"><circle cx="40" cy="55" r="20"/><circle cx="62" cy="42" r="26"/><circle cx="88" cy="57" r="18"/><rect x="40" y="57" width="48" height="18"/></g>
+          <clipPath id="cc"><use href="#cs"/></clipPath>
+        </defs>
+        <g class="cloud-shell">
+          <use href="#cs" fill="var(--hum)" stroke="var(--hum)" stroke-width="5" stroke-linejoin="round" />
+          <use href="#cs" fill="var(--surface-2)" />
+          <g clip-path="url(#cc)">
+            <g class="water" id="water" style="transform:translateY(59px)">
+              <g class="wave"><path d="M-60 16 Q-45 10 -30 16 T0 16 T30 16 T60 16 T90 16 T120 16 T150 16 T180 16 T210 16 T240 16 V90 H-60Z" fill="var(--hum)" opacity=".85"/></g>
+            </g>
+          </g>
+          <g class="rain" id="rain"><line x1="48" y1="86" x2="46" y2="94"/><line x1="64" y1="86" x2="62" y2="94"/><line x1="80" y1="86" x2="78" y2="94"/></g>
+        </g>
+      </svg>
+      <div>
+        <div class="label"><span>Humidity</span><span id="hum-trend"></span></div>
+        <div class="value" id="latest-hum">--<small>%</small></div>
         <div class="stats">
-          <div class="stat"><span>Min</span><strong id="hum-min">--</strong></div>
-          <div class="stat"><span>Average</span><strong id="hum-avg">--</strong></div>
-          <div class="stat"><span>Max</span><strong id="hum-max">--</strong></div>
-        </div>
-      </article>
-    </section>
-
-    <section class="panel" aria-labelledby="recent-title">
-      <div class="panel-head">
-        <h2 id="recent-title">Recent readings</h2>
-        <div class="toolbar">
-          <button id="csv-btn" type="button">Export CSV</button>
-          <button id="refresh-btn" type="button">Refresh now</button>
+          <div><span>Min</span><strong id="hum-min">--</strong></div>
+          <div><span>Average</span><strong id="hum-avg">--</strong></div>
+          <div><span>Max</span><strong id="hum-max">--</strong></div>
         </div>
       </div>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr><th scope="col">Date and time</th><th scope="col">Temperature (°C)</th><th scope="col">Humidity (%)</th></tr>
-          </thead>
-          <tbody id="readings-table">
-            <tr><td class="empty" colspan="3">Loading readings…</td></tr>
-          </tbody>
-        </table>
+    </article>
+  </section>
+
+  <section class="insights" aria-label="Derived conditions">
+    <div class="panel insight"><div class="muted">Feels like</div><div class="big" id="feels">--</div></div>
+    <div class="panel insight"><div class="muted">Dew point</div><div class="big" id="dew">--</div></div>
+    <div class="panel insight"><div class="muted">Comfort</div><div class="big" id="comfort">--</div></div>
+  </section>
+
+  <section class="panel" aria-labelledby="trend-title">
+    <div class="panel-head">
+      <h2 id="trend-title">Trend</h2>
+      <div class="legend"><span><i style="background:var(--temp)"></i>Temperature</span><span><i style="background:var(--hum)"></i>Humidity</span></div>
+      <div class="toolbar" id="range-btns">
+        <button type="button" data-n="20" aria-pressed="false">20</button>
+        <button type="button" data-n="50" aria-pressed="true">50</button>
+        <button type="button" data-n="200" aria-pressed="false">200</button>
+        <button type="button" data-n="0" aria-pressed="false">All</button>
       </div>
-    </section>
-  </div>
+    </div>
+    <div class="chart-wrap"><svg class="chart" id="chart" tabindex="0" role="img" aria-label="Temperature and humidity over time"></svg><div class="tip" id="tip"></div></div>
+  </section>
 
-  <script>
-    const POLL_MS = 5000;
-    const STALE_AFTER_MS = 2 * 60 * 1000; // reading older than this = "Stale"
-    const CHART_POINTS = 40;
-    const TABLE_ROWS = 20;
+  <details class="panel">
+    <summary>Alert thresholds</summary>
+    <div class="alerts">
+      <label>Temperature above (°C)<input id="a-thigh" type="number" step="0.5" /></label>
+      <label>Temperature below (°C)<input id="a-tlow" type="number" step="0.5" /></label>
+      <label>Humidity above (%)<input id="a-hhigh" type="number" step="1" /></label>
+      <label>Humidity below (%)<input id="a-hlow" type="number" step="1" /></label>
+    </div>
+    <p class="muted" style="margin-top:.75rem">Leave a field empty to turn that alert off. Settings are saved in this browser.</p>
+  </details>
 
-    const $ = (id) => document.getElementById(id);
-    let rows = [];
-    let inFlight = false;
-    let timer = null;
+  <section class="panel" aria-labelledby="recent-title">
+    <div class="panel-head">
+      <h2 id="recent-title">Recent readings</h2>
+      <div class="toolbar"><button id="csv-btn" type="button">Export CSV</button><button id="refresh-btn" type="button">Refresh now</button></div>
+    </div>
+    <div class="table-scroll"><table>
+      <thead><tr><th scope="col">Date and time</th><th scope="col" id="th-temp">Temperature</th><th scope="col">Humidity (%)</th></tr></thead>
+      <tbody id="readings-table"><tr><td class="empty" colspan="3">Loading readings…</td></tr></tbody>
+    </table></div>
+  </section>
+</div>
 
-    /* ---------- helpers ---------- */
-    const num = (v) => (v === null || v === undefined || v === "" || isNaN(Number(v)) ? null : Number(v));
-    const fmt = (v, d = 1) => (v === null ? "--" : v.toFixed(d));
-    const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+<script>
+  const POLL_MS = 5000, STALE_MS = 120000, TABLE_ROWS = 20;
+  const T_MIN = 10, T_MAX = 45;               // thermometer scale in °C
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  let rows = [], inFlight = false, timer = null;
+  let unit = store.get("unit", "C"), range = Number(store.get("range", 50));
+  const shown = { temp: null, hum: null };
 
-    function stats(values) {
-      const v = values.filter((x) => x !== null);
-      if (!v.length) return { min: null, max: null, avg: null };
-      return { min: Math.min(...v), max: Math.max(...v), avg: v.reduce((a, b) => a + b, 0) / v.length };
+  /* ---------- helpers ---------- */
+  const num = (v) => (v === null || v === undefined || v === "" || isNaN(Number(v)) ? null : Number(v));
+  const conv = (c) => (c === null ? null : unit === "F" ? c * 9 / 5 + 32 : c);
+  const fmt = (v, d = 1) => (v === null ? "--" : v.toFixed(d));
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+  const stats = (arr) => { const v = arr.filter((x) => x !== null); return v.length ? { min: Math.min(...v), max: Math.max(...v), avg: v.reduce((a, b) => a + b, 0) / v.length } : { min: null, max: null, avg: null }; };
+  const trend = (arr, u) => { const v = arr.filter((x) => x !== null); if (v.length < 2) return ""; const d = v[v.length - 1] - v[v.length - 2]; return Math.abs(d) < 0.05 ? "Steady" : `${d > 0 ? "Up" : "Down"} ${Math.abs(d).toFixed(1)}${u}`; };
+
+  // Dew point (Magnus) and apparent temperature (BoM), both in °C
+  const dewPoint = (t, h) => { const g = Math.log(Math.max(h, 1) / 100) + 17.62 * t / (243.12 + t); return 243.12 * g / (17.62 - g); };
+  const feelsLike = (t, h) => t + 0.33 * (h / 100 * 6.105 * Math.exp(17.27 * t / (237.7 + t))) - 4;
+  const comfort = (dp) => dp < 10 ? "Dry" : dp < 16 ? "Comfortable" : dp < 21 ? "Humid" : dp < 24 ? "Muggy" : "Oppressive";
+
+  function setStatus(state, text) { $("status").dataset.state = state; $("status-text").textContent = text; $("offline-banner").classList.toggle("show", state === "offline"); }
+
+  // Count-up animation for the big numbers
+  function tween(el, key, to, suffix) {
+    const from = shown[key] === null ? to : shown[key]; shown[key] = to;
+    if (to === null || matchMedia("(prefers-reduced-motion: reduce)").matches) { el.innerHTML = `${fmt(to)}<small>${suffix}</small>`; return; }
+    const t0 = performance.now();
+    (function step(now) {
+      const p = clamp((now - t0) / 700, 0, 1), e = 1 - Math.pow(1 - p, 3);
+      el.innerHTML = `${(from + (to - from) * e).toFixed(1)}<small>${suffix}</small>`;
+      if (p < 1) requestAnimationFrame(step);
+    })(t0);
+  }
+
+  /* ---------- thermometer + cloud ---------- */
+  function drawTicks() {
+    let out = "";
+    for (let c = 10; c <= 40; c += 10) {
+      const y = 130 - ((c - T_MIN) / (T_MAX - T_MIN)) * 118;
+      out += `<line class="tick" x1="40" x2="48" y1="${y}" y2="${y}"/><text class="ticklabel" x="52" y="${y + 3}">${Math.round(conv(c))}°</text>`;
     }
+    $("ticks").innerHTML = out;
+  }
+  function setThermometer(c) {
+    const p = c === null ? 0.02 : clamp((c - T_MIN) / (T_MAX - T_MIN), 0.02, 1);
+    $("merc").style.transform = `scaleY(${p})`;
+    $("thermo").style.setProperty("--merc", `hsl(${Math.round(210 - p * 210)} 85% 52%)`);
+  }
+  function setCloud(h) {
+    const p = h === null ? 0 : clamp(h, 0, 100) / 100;
+    $("water").style.transform = `translateY(${((1 - p) * 62).toFixed(1)}px)`;
+    $("rain").classList.toggle("on", h !== null && h >= 75);
+  }
 
-    function trendText(values, unit) {
-      const v = values.filter((x) => x !== null);
-      if (v.length < 2) return "";
-      const diff = v[v.length - 1] - v[v.length - 2];
-      if (Math.abs(diff) < 0.05) return "Steady";
-      return `${diff > 0 ? "Up" : "Down"} ${Math.abs(diff).toFixed(1)}${unit}`;
+  /* ---------- chart ---------- */
+  function drawChart(data) {
+    const svg = $("chart"), tip = $("tip"), W = 800, H = 240, L = 40, R = 40, T = 14, B = 24;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("preserveAspectRatio", "none");
+    const temps = data.map((r) => conv(num(r.temperature))), hums = data.map((r) => num(r.humidity));
+    const times = data.map((r) => (r.date ? new Date(r.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""));
+    if (data.length < 2) { svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" fill="${css("--muted")}" text-anchor="middle" font-size="14">Not enough readings to draw a trend yet</text>`; svg.onpointermove = null; return; }
+
+    const scale = (arr) => { const v = arr.filter((x) => x !== null); let lo = Math.min(...v), hi = Math.max(...v); if (hi - lo < 1) { lo -= .5; hi += .5; } const s = (hi - lo) * .12; return { lo: lo - s, hi: hi + s }; };
+    const ts = scale(temps), hs = scale(hums), n = data.length;
+    const x = (i) => L + (i / (n - 1)) * (W - L - R);
+    const y = (v, s) => T + (1 - (v - s.lo) / (s.hi - s.lo)) * (H - T - B);
+    const path = (arr, s) => arr.map((v, i) => (v === null ? "" : `${i && arr[i - 1] !== null ? "L" : "M"}${x(i).toFixed(1)},${y(v, s).toFixed(1)}`)).join("");
+    const grid = css("--border"), muted = css("--muted"), ct = css("--temp"), ch = css("--hum");
+    let g = "";
+    for (let k = 0; k <= 3; k++) {
+      const gy = T + (k / 3) * (H - T - B), tv = ts.hi - (k / 3) * (ts.hi - ts.lo), hv = hs.hi - (k / 3) * (hs.hi - hs.lo);
+      g += `<line x1="${L}" x2="${W - R}" y1="${gy}" y2="${gy}" stroke="${grid}" ${k && k < 3 ? 'stroke-dasharray="3 4"' : ""}/>
+            <text x="${L - 6}" y="${gy + 4}" fill="${ct}" font-size="11" text-anchor="end">${tv.toFixed(0)}</text>
+            <text x="${W - R + 6}" y="${gy + 4}" fill="${ch}" font-size="11">${hv.toFixed(0)}</text>`;
     }
+    svg.innerHTML = `${g}
+      <text x="${L}" y="${H - 5}" fill="${muted}" font-size="11">${times[0]}</text>
+      <text x="${W - R}" y="${H - 5}" fill="${muted}" font-size="11" text-anchor="end">${times[n - 1]}</text>
+      <path d="${path(hums, hs)}" fill="none" stroke="${ch}" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      <path d="${path(temps, ts)}" fill="none" stroke="${ct}" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      <line id="cur" y1="${T}" y2="${H - B}" stroke="${muted}" stroke-dasharray="3 3" opacity="0" vector-effect="non-scaling-stroke"/>`;
 
-    function setStatus(state, text) {
-      $("status").dataset.state = state;
-      $("status-text").textContent = text;
-      $("banner").classList.toggle("show", state === "offline");
+    const cur = svg.querySelector("#cur"), u = unit === "F" ? "°F" : "°C";
+    svg.onpointermove = (e) => {
+      const r = svg.getBoundingClientRect(), i = clamp(Math.round(clamp((e.clientX - r.left) / r.width, 0, 1) * (n - 1)), 0, n - 1);
+      cur.setAttribute("x1", x(i)); cur.setAttribute("x2", x(i)); cur.setAttribute("opacity", "1");
+      tip.textContent = `${times[i]} · ${fmt(temps[i])}${u} · ${fmt(hums[i])}%`;
+      tip.style.left = `${clamp(((x(i)) / W) * r.width + 16, 70, r.width - 40)}px`; tip.style.top = `18px`; tip.classList.add("show");
+    };
+    svg.onpointerleave = svg.onblur = () => { cur.setAttribute("opacity", "0"); tip.classList.remove("show"); };
+  }
+
+  /* ---------- alerts ---------- */
+  const ALERT_KEYS = { "a-thigh": 35, "a-tlow": 10, "a-hhigh": 85, "a-hlow": 20 };
+  function checkAlerts(t, h) {
+    const lim = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
+    const msgs = [];
+    if (t !== null) {
+      if (lim("a-thigh") !== null && t > lim("a-thigh")) msgs.push(`Temperature is above ${lim("a-thigh")}°C`);
+      if (lim("a-tlow") !== null && t < lim("a-tlow")) msgs.push(`Temperature is below ${lim("a-tlow")}°C`);
     }
-
-    /* ---------- chart ---------- */
-    function drawChart(svgId, tipId, series, times, colorVar, unit) {
-      const svg = $(svgId), tip = $(tipId);
-      const W = 600, H = 140, padX = 8, padT = 10, padB = 18;
-      const pts = series.map((v, i) => ({ v, i })).filter((p) => p.v !== null);
-      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-      svg.setAttribute("preserveAspectRatio", "none");
-      if (pts.length < 2) { svg.innerHTML = ""; return; }
-
-      const color = css(colorVar), grid = css("--border"), muted = css("--muted");
-      const vals = pts.map((p) => p.v);
-      let lo = Math.min(...vals), hi = Math.max(...vals);
-      if (hi - lo < 1) { lo -= 0.5; hi += 0.5; }
-      const span = hi - lo; lo -= span * 0.1; hi += span * 0.1;
-
-      const x = (i) => padX + (i / (series.length - 1)) * (W - padX * 2);
-      const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
-      const line = pts.map((p, k) => `${k ? "L" : "M"}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
-      const area = `${line}L${x(pts[pts.length - 1].i).toFixed(1)},${H - padB}L${x(pts[0].i).toFixed(1)},${H - padB}Z`;
-      const gid = `g-${svgId}`;
-
-      svg.innerHTML = `
-        <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="${color}" stop-opacity=".25"/><stop offset="1" stop-color="${color}" stop-opacity="0"/>
-        </linearGradient></defs>
-        <line x1="${padX}" x2="${W - padX}" y1="${H - padB}" y2="${H - padB}" stroke="${grid}" />
-        <line x1="${padX}" x2="${W - padX}" y1="${padT}" y2="${padT}" stroke="${grid}" stroke-dasharray="3 4" />
-        <text x="${padX}" y="${H - 3}" fill="${muted}" font-size="11">${times[0] || ""}</text>
-        <text x="${W - padX}" y="${H - 3}" fill="${muted}" font-size="11" text-anchor="end">${times[times.length - 1] || ""}</text>
-        <path d="${area}" fill="url(#${gid})" />
-        <path d="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-        <line id="${svgId}-cur" y1="${padT}" y2="${H - padB}" stroke="${muted}" stroke-dasharray="3 3" opacity="0" vector-effect="non-scaling-stroke" />`;
-
-      const cur = svg.querySelector(`#${svgId}-cur`);
-      const show = (clientX) => {
-        const r = svg.getBoundingClientRect();
-        const rel = Math.min(Math.max((clientX - r.left) / r.width, 0), 1);
-        const idx = Math.round(rel * (series.length - 1));
-        const p = pts.reduce((a, b) => (Math.abs(b.i - idx) < Math.abs(a.i - idx) ? b : a));
-        const px = (x(p.i) / W) * r.width, py = (y(p.v) / H) * r.height;
-        cur.setAttribute("x1", x(p.i)); cur.setAttribute("x2", x(p.i)); cur.setAttribute("opacity", "1");
-        tip.textContent = `${p.v.toFixed(1)}${unit} at ${times[p.i]}`;
-        tip.style.left = `${Math.min(Math.max(px, 50), r.width - 50)}px`;
-        tip.style.top = `${py}px`;
-        tip.classList.add("show");
-      };
-      const hide = () => { cur.setAttribute("opacity", "0"); tip.classList.remove("show"); };
-      svg.onpointermove = (e) => show(e.clientX);
-      svg.onpointerleave = hide;
-      svg.onblur = hide;
+    if (h !== null) {
+      if (lim("a-hhigh") !== null && h > lim("a-hhigh")) msgs.push(`Humidity is above ${lim("a-hhigh")}%`);
+      if (lim("a-hlow") !== null && h < lim("a-hlow")) msgs.push(`Humidity is below ${lim("a-hlow")}%`);
     }
+    $("alert-banner").textContent = msgs.join(". ");
+    $("alert-banner").classList.toggle("show", msgs.length > 0);
+  }
 
-    /* ---------- render ---------- */
-    function render() {
-      const body = $("readings-table");
-      if (!rows.length) {
-        body.innerHTML = `<tr><td class="empty" colspan="3">No readings yet. Data appears here as soon as the ESP32 sends its first reading.</td></tr>`;
-        return;
-      }
+  /* ---------- render ---------- */
+  function render() {
+    $("unit-btn").textContent = unit === "F" ? "°F" : "°C";
+    $("th-temp").textContent = `Temperature (°${unit})`;
+    drawTicks();
+    const body = $("readings-table");
+    if (!rows.length) { body.innerHTML = `<tr><td class="empty" colspan="3">No readings yet. Data appears here as soon as the ESP32 sends its first reading.</td></tr>`; return; }
 
-      const latest = rows[rows.length - 1];
-      const temps = rows.map((r) => num(r.temperature));
-      const hums = rows.map((r) => num(r.humidity));
+    const latest = rows[rows.length - 1];
+    const tc = rows.map((r) => num(r.temperature)), hs = rows.map((r) => num(r.humidity));
+    const t = tc[tc.length - 1], h = hs[hs.length - 1], tu = `°${unit}`;
 
-      $("latest-temp").innerHTML = `${fmt(temps[temps.length - 1])}<small>°C</small>`;
-      $("latest-hum").innerHTML = `${fmt(hums[hums.length - 1])}<small>%</small>`;
-      $("temp-trend").textContent = trendText(temps, "°");
-      $("hum-trend").textContent = trendText(hums, "%");
+    tween($("latest-temp"), "temp", conv(t), tu); tween($("latest-hum"), "hum", h, "%");
+    setThermometer(t); setCloud(h);
+    $("temp-trend").textContent = trend(tc.map(conv), "°"); $("hum-trend").textContent = trend(hs, "%");
 
-      const ts = stats(temps), hs = stats(hums);
-      $("temp-min").textContent = fmt(ts.min); $("temp-avg").textContent = fmt(ts.avg); $("temp-max").textContent = fmt(ts.max);
-      $("hum-min").textContent = fmt(hs.min);  $("hum-avg").textContent = fmt(hs.avg);  $("hum-max").textContent = fmt(hs.max);
+    const a = stats(tc.map(conv)), b = stats(hs);
+    $("temp-min").textContent = fmt(a.min); $("temp-avg").textContent = fmt(a.avg); $("temp-max").textContent = fmt(a.max);
+    $("hum-min").textContent = fmt(b.min); $("hum-avg").textContent = fmt(b.avg); $("hum-max").textContent = fmt(b.max);
 
-      const recent = rows.slice(-CHART_POINTS);
-      const times = recent.map((r) => (r.date ? new Date(r.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""));
-      drawChart("temp-chart", "temp-tip", recent.map((r) => num(r.temperature)), times, "--temp", "°C");
-      drawChart("hum-chart", "hum-tip", recent.map((r) => num(r.humidity)), times, "--hum", "%");
-
-      body.innerHTML = [...rows].reverse().slice(0, TABLE_ROWS).map((r) => `
-        <tr>
-          <td>${r.date ? new Date(r.date).toLocaleString() : "N/A"}</td>
-          <td>${fmt(num(r.temperature))}</td>
-          <td>${fmt(num(r.humidity))}</td>
-        </tr>`).join("");
-
-      const when = latest.date ? new Date(latest.date) : null;
-      const age = when ? Date.now() - when.getTime() : null;
-      $("subtitle").textContent = when ? `Last reading ${when.toLocaleString()}` : "Last reading time unknown";
-      if (age !== null && age > STALE_AFTER_MS) setStatus("stale", "Stale data");
-      else setStatus("live", `Live · updated ${new Date().toLocaleTimeString()}`);
+    if (t !== null && h !== null) {
+      const dp = dewPoint(t, h);
+      $("feels").textContent = `${fmt(conv(feelsLike(t, h)))}${tu}`; $("dew").textContent = `${fmt(conv(dp))}${tu}`; $("comfort").textContent = comfort(dp);
     }
+    drawChart(range ? rows.slice(-range) : rows);
+    checkAlerts(t, h);
 
-    /* ---------- data ---------- */
-    async function fetchReadings() {
-      if (inFlight) return;
-      inFlight = true;
-      $("refresh-btn").disabled = true;
-      const ctrl = new AbortController();
-      const timeout = setTimeout(() => ctrl.abort(), 4000);
-      try {
-        const res = await fetch("/readings", { signal: ctrl.signal, cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        rows = Array.isArray(json.data) ? json.data : [];
-        render();
-      } catch (err) {
-        console.error("Failed to fetch readings:", err);
-        setStatus("offline", "Offline");
-      } finally {
-        clearTimeout(timeout);
-        inFlight = false;
-        $("refresh-btn").disabled = false;
-      }
-    }
+    body.innerHTML = [...rows].reverse().slice(0, TABLE_ROWS).map((r) =>
+      `<tr><td>${r.date ? new Date(r.date).toLocaleString() : "N/A"}</td><td>${fmt(conv(num(r.temperature)))}</td><td>${fmt(num(r.humidity))}</td></tr>`).join("");
 
-    function startPolling() { stopPolling(); timer = setInterval(fetchReadings, POLL_MS); }
-    function stopPolling() { if (timer) clearInterval(timer); timer = null; }
+    const when = latest.date ? new Date(latest.date) : null;
+    $("subtitle").textContent = when ? `Last reading ${when.toLocaleString()}` : "Last reading time unknown";
+    if (when && Date.now() - when.getTime() > STALE_MS) setStatus("stale", "Stale data");
+    else setStatus("live", `Live · updated ${new Date().toLocaleTimeString()}`);
+  }
 
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) stopPolling();
-      else { fetchReadings(); startPolling(); }
-    });
-
-    /* ---------- actions ---------- */
-    $("refresh-btn").addEventListener("click", fetchReadings);
-
-    $("csv-btn").addEventListener("click", () => {
-      if (!rows.length) return;
-      const csv = ["date,temperature_c,humidity_pct", ...rows.map((r) => `${r.date ?? ""},${r.temperature ?? ""},${r.humidity ?? ""}`)].join("\n");
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-      a.download = "weather-readings.csv";
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
-
-    $("theme-btn").addEventListener("click", () => {
-      const root = document.documentElement;
-      const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-      root.dataset.theme = dark ? "light" : "dark";
-      try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+  /* ---------- data ---------- */
+  async function fetchReadings() {
+    if (inFlight) return; inFlight = true; $("refresh-btn").disabled = true;
+    const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const res = await fetch("/readings", { signal: ctrl.signal, cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      rows = Array.isArray(json.data) ? json.data : [];
       render();
-    });
+    } catch (err) { console.error("Failed to fetch readings:", err); setStatus("offline", "Offline"); }
+    finally { clearTimeout(to); inFlight = false; $("refresh-btn").disabled = false; }
+  }
+  const startPolling = () => { stopPolling(); timer = setInterval(fetchReadings, POLL_MS); };
+  const stopPolling = () => { if (timer) clearInterval(timer); timer = null; };
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stopPolling(); else { fetchReadings(); startPolling(); } });
 
-    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+  /* ---------- controls ---------- */
+  $("refresh-btn").onclick = fetchReadings;
+  $("unit-btn").onclick = () => { unit = unit === "C" ? "F" : "C"; store.set("unit", unit); shown.temp = null; render(); };
+  $("theme-btn").onclick = () => {
+    const root = document.documentElement, dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark"; store.set("theme", root.dataset.theme); render();
+  };
+  $("range-btns").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    range = Number(b.dataset.n); store.set("range", range);
+    document.querySelectorAll("#range-btns button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    if (rows.length) drawChart(range ? rows.slice(-range) : rows);
+  };
+  $("csv-btn").onclick = () => {
+    if (!rows.length) return;
+    const csv = ["date,temperature_c,humidity_pct", ...rows.map((r) => `${r.date ?? ""},${r.temperature ?? ""},${r.humidity ?? ""}`)].join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "weather-readings.csv"; a.click(); URL.revokeObjectURL(a.href);
+  };
+  for (const id in ALERT_KEYS) {
+    $(id).value = store.get(id, ALERT_KEYS[id]);
+    $(id).oninput = () => { store.set(id, $(id).value); if (rows.length) checkAlerts(num(rows[rows.length - 1].temperature), num(rows[rows.length - 1].humidity)); };
+  }
+  document.querySelectorAll("#range-btns button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.n) === range)));
+  const savedTheme = store.get("theme", ""); if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 
-    fetchReadings();
-    startPolling();
-  </script>
+  drawTicks(); fetchReadings(); startPolling();
+</script>
 </body>
 </html>
